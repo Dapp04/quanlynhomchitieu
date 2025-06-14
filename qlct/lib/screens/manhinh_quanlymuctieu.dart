@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../tabs/number_formatter.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class ManHinhQuanLyMucTieu extends StatefulWidget {
   final double mucTieu;
@@ -35,92 +34,22 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
   double _tongTienTietKiem = 0.0;
   DateTime _ngayBatDau = DateTime.now();
   DateTime _ngayKetThuc = DateTime.now();
-  String _khoangThoiGian = 'Tùy chỉnh'; // Mặc định là tùy chỉnh
+  String _khoangThoiGian = 'Tùy chỉnh';
   bool _isLoading = true;
-
-  // Khởi tạo plugin thông báo
-  late FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin;
+  String _currentUserPhone = '';
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-    _initializeNotifications();
+    _loadCurrentUserPhone();
   }
 
-  // Khởi tạo thông báo
-  Future<void> _initializeNotifications() async {
-    _flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    const DarwinInitializationSettings initializationSettingsIOS =
-        DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
-
-    await _flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-    // Tạo kênh thông báo cho Android
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      'goal_channel_id',
-      'Goal Notifications',
-      description: 'Thông báo đến hạn mục tiêu tiết kiệm',
-      importance: Importance.max,
-    );
-
-    await _flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
-
-    // Yêu cầu quyền thông báo trên iOS
-    await _flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
-  }
-
-  // Lên lịch thông báo
-  Future<void> _scheduleNotification(DateTime deadline, String goalDescription) async {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-      'goal_channel_id',
-      'Goal Notifications',
-      channelDescription: 'Thông báo đến hạn mục tiêu tiết kiệm',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-
-    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
-        DarwinNotificationDetails();
-
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
-      iOS: iOSPlatformChannelSpecifics,
-    );
-
-    await _flutterLocalNotificationsPlugin.zonedSchedule(
-      0, // ID thông báo
-      'Mục tiêu tiết kiệm đến hạn!',
-      'Mục tiêu "${goalDescription.isEmpty ? 'Tiết kiệm' : goalDescription}" của bạn đã đến hạn.',
-      deadline,
-      platformChannelSpecifics,
-      androidAllowWhileIdle: true,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.time,
-    );
+  Future<void> _loadCurrentUserPhone() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _currentUserPhone = prefs.getString('currentUserPhone') ?? '';
+      _loadData();
+    });
   }
 
   Future<void> _loadData() async {
@@ -132,12 +61,11 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
           ? _mucTieu.toStringAsFixed(0).replaceAllMapped(
               RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')
           : '';
-      _moTaMucTieuController.text = prefs.getString('moTaMucTieu') ?? '';
+      _moTaMucTieuController.text = prefs.getString('${_currentUserPhone}_moTaMucTieu') ?? '';
 
-      // Load ngày bắt đầu và ngày kết thúc từ SharedPreferences
-      String? savedNgayBatDau = prefs.getString('ngayBatDauMucTieu');
-      String? savedNgayKetThuc = prefs.getString('ngayKetThucMucTieu');
-      _khoangThoiGian = prefs.getString('khoangThoiGianMucTieu') ?? 'Tùy chỉnh';
+      String? savedNgayBatDau = prefs.getString('${_currentUserPhone}_ngayBatDauMucTieu');
+      String? savedNgayKetThuc = prefs.getString('${_currentUserPhone}_ngayKetThucMucTieu');
+      _khoangThoiGian = prefs.getString('${_currentUserPhone}_khoangThoiGianMucTieu') ?? 'Tùy chỉnh';
 
       if (savedNgayBatDau != null && savedNgayKetThuc != null) {
         try {
@@ -172,14 +100,14 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
 
   Future<void> _saveMoTaMucTieu() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('moTaMucTieu', _moTaMucTieuController.text);
+    await prefs.setString('${_currentUserPhone}_moTaMucTieu', _moTaMucTieuController.text);
   }
 
   Future<void> _saveThoiGianMucTieu() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('ngayBatDauMucTieu', _ngayBatDauController.text);
-    await prefs.setString('ngayKetThucMucTieu', _ngayKetThucController.text);
-    await prefs.setString('khoangThoiGianMucTieu', _khoangThoiGian);
+    await prefs.setString('${_currentUserPhone}_ngayBatDauMucTieu', _ngayBatDauController.text);
+    await prefs.setString('${_currentUserPhone}_ngayKetThucMucTieu', _ngayKetThucController.text);
+    await prefs.setString('${_currentUserPhone}_khoangThoiGianMucTieu', _khoangThoiGian);
   }
 
   Future<void> _chonNgayBatDau() async {
@@ -192,7 +120,7 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
         return Theme(
           data: ThemeData.light().copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF40C4FF),
+              primary: Color(0xFF6366F1),
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: Colors.black87,
@@ -209,8 +137,6 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
         _ngayBatDau = ngayChon;
         _ngayBatDauController.text =
             '${ngayChon.day.toString().padLeft(2, '0')}/${ngayChon.month.toString().padLeft(2, '0')}/${ngayChon.year}';
-
-        // Nếu ngày bắt đầu thay đổi, tự động cập nhật ngày kết thúc dựa trên khoảng thời gian
         _capNhatNgayKetThuc();
       });
     }
@@ -220,13 +146,13 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
     final DateTime? ngayChon = await showDatePicker(
       context: context,
       initialDate: _ngayKetThuc,
-      firstDate: _ngayBatDau, // Ngày kết thúc không được trước ngày bắt đầu
+      firstDate: _ngayBatDau,
       lastDate: DateTime(2100),
       builder: (context, child) {
         return Theme(
           data: ThemeData.light().copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF40C4FF),
+              primary: Color(0xFF6366F1),
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: Colors.black87,
@@ -260,7 +186,6 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
         ngayKetThucMoi = DateTime(_ngayBatDau.year + 1, _ngayBatDau.month, _ngayBatDau.day);
         break;
       case 'Tùy chỉnh':
-        // Không tự động cập nhật nếu là tùy chỉnh
         return;
     }
     setState(() {
@@ -278,180 +203,533 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        title: const Text(
-          'Quản lý mục tiêu',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF40C4FF), Color(0xFF81D4FA)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+              color: const Color(0xFF6366F1),
+              child: const Center(
+                child: Text(
+                  'Quản Lý Mục Tiêu',
+                  style: TextStyle(
+                    fontFamily: 'Roboto',
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _mucTieuController,
-                        decoration: InputDecoration(
-                          labelText: 'Số tiền mục tiêu (VNĐ)',
-                          labelStyle: const TextStyle(color: Colors.black54),
-                          prefixIcon: const Icon(
-                            Icons.savings,
-                            color: Color(0xFF40C4FF),
-                          ),
-                          suffixText: 'VNĐ',
-                          suffixStyle: const TextStyle(color: Colors.black54),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFF40C4FF)),
-                          ),
-                        ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          NumberFormatter(),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _moTaMucTieuController,
-                        decoration: InputDecoration(
-                          labelText: 'Mô tả mục tiêu',
-                          labelStyle: const TextStyle(color: Colors.black54),
-                          prefixIcon: const Icon(
-                            Icons.description,
-                            color: Color(0xFF40C4FF),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFF40C4FF)),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: _khoangThoiGian,
-                        decoration: InputDecoration(
-                          labelText: 'Khoảng thời gian',
-                          labelStyle: const TextStyle(color: Colors.black54),
-                          prefixIcon: const Icon(
-                            Icons.timer,
-                            color: Color(0xFF40C4FF),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFF40C4FF)),
-                          ),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: '1 tuần',
-                            child: Text('1 tuần'),
-                          ),
-                          DropdownMenuItem(
-                            value: '1 tháng',
-                            child: Text('1 tháng'),
-                          ),
-                          DropdownMenuItem(
-                            value: '1 năm',
-                            child: Text('1 năm'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Tùy chỉnh',
-                            child: Text('Tùy chỉnh'),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
                           ),
                         ],
-                        onChanged: (value) {
-                          setState(() {
-                            _khoangThoiGian = value!;
-                            _capNhatNgayKetThuc();
-                          });
-                        },
                       ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _ngayBatDauController,
-                        decoration: InputDecoration(
-                          labelText: 'Ngày bắt đầu',
-                          labelStyle: const TextStyle(color: Colors.black54),
-                          prefixIcon: const Icon(
-                            Icons.calendar_today,
-                            color: Color(0xFF40C4FF),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFF40C4FF)),
-                          ),
-                        ),
-                        readOnly: true,
-                        onTap: _chonNgayBatDau,
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _ngayKetThucController,
-                        decoration: InputDecoration(
-                          labelText: 'Ngày kết thúc',
-                          labelStyle: const TextStyle(color: Colors.black54),
-                          prefixIcon: const Icon(
-                            Icons.calendar_today,
-                            color: Color(0xFF40C4FF),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFF40C4FF)),
-                          ),
-                        ),
-                        readOnly: true,
-                        onTap: _khoangThoiGian == 'Tùy chỉnh' ? _chonNgayKetThuc : null,
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          GestureDetector(
+                          const Text(
+                            'Thiết Lập Mục Tiêu',
+                            style: TextStyle(
+                              fontFamily: 'Roboto',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _mucTieuController,
+                            decoration: InputDecoration(
+                              labelText: 'Số tiền mục tiêu (VNĐ)',
+                              labelStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              suffixText: 'VNĐ',
+                              suffixStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: Color(0xFF6366F1)),
+                              ),
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              NumberFormatter(),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _moTaMucTieuController,
+                            decoration: InputDecoration(
+                              labelText: 'Mô tả mục tiêu',
+                              labelStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: Color(0xFF6366F1)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: _khoangThoiGian,
+                            decoration: InputDecoration(
+                              labelText: 'Khoảng thời gian',
+                              labelStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: Color(0xFF6366F1)),
+                              ),
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: '1 tuần', child: Text('1 tuần')),
+                              DropdownMenuItem(value: '1 tháng', child: Text('1 tháng')),
+                              DropdownMenuItem(value: '1 năm', child: Text('1 năm')),
+                              DropdownMenuItem(value: 'Tùy chỉnh', child: Text('Tùy chỉnh')),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _khoangThoiGian = value!;
+                                _capNhatNgayKetThuc();
+                              });
+                            },
+                            style: const TextStyle(
+                              fontFamily: 'Roboto',
+                              color: Colors.black,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _ngayBatDauController,
+                            decoration: InputDecoration(
+                              labelText: 'Ngày bắt đầu',
+                              labelStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: Color(0xFF6366F1)),
+                              ),
+                            ),
+                            readOnly: true,
+                            onTap: _chonNgayBatDau,
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _ngayKetThucController,
+                            decoration: InputDecoration(
+                              labelText: 'Ngày kết thúc',
+                              labelStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: Color(0xFF6366F1)),
+                              ),
+                            ),
+                            readOnly: true,
+                            onTap: _khoangThoiGian == 'Tùy chỉnh' ? _chonNgayKetThuc : null,
+                          ),
+                          const SizedBox(height: 8),
+                          Center(
+                            child: GestureDetector(
+                              onTap: () {
+                                String rawMucTieu = _mucTieuController.text.replaceAll('.', '');
+                                double newMucTieu = double.tryParse(rawMucTieu) ?? _mucTieu;
+
+                                if (_ngayKetThuc.isBefore(_ngayBatDau)) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Ngày kết thúc phải sau ngày bắt đầu!'),
+                                      backgroundColor: Color(0xFFFF2D55),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setState(() {
+                                  _mucTieu = newMucTieu;
+                                });
+
+                                _saveMoTaMucTieu();
+                                _saveThoiGianMucTieu();
+                                widget.onMucTieuUpdated?.call(_mucTieu, _ngayKetThuc);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Đã lưu mục tiêu tiết kiệm!'),
+                                    backgroundColor: Color(0xFF34C759),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6366F1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'Lưu mục tiêu',
+                                  style: TextStyle(
+                                    fontFamily: 'Roboto',
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Thêm Tiền Tiết Kiệm',
+                            style: TextStyle(
+                              fontFamily: 'Roboto',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _tienTietKiemController,
+                            decoration: InputDecoration(
+                              labelText: 'Số tiền tiết kiệm (VNĐ)',
+                              labelStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              suffixText: 'VNĐ',
+                              suffixStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: Color(0xFF6366F1)),
+                              ),
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              NumberFormatter(),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Tổng tiết kiệm hiện tại: ${_tongTienTietKiem == 0 ? '0' : _tongTienTietKiem.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')} VNĐ',
+                            style: const TextStyle(
+                              fontFamily: 'Roboto',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF6366F1),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Center(
+                            child: GestureDetector(
+                              onTap: () {
+                                String rawTienTietKiem = _tienTietKiemController.text.replaceAll('.', '');
+                                double tienTietKiem = double.tryParse(rawTienTietKiem) ?? 0.0;
+
+                                if (tienTietKiem <= 0) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Vui lòng nhập số tiền hợp lệ!'),
+                                      backgroundColor: Color(0xFFFF2D55),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                if (tienTietKiem > widget.soDu) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Số tiền tiết kiệm không được vượt quá số dư hiện có!'),
+                                      backgroundColor: Color(0xFFFF2D55),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setState(() {
+                                  _tongTienTietKiem += tienTietKiem;
+                                });
+
+                                _tienTietKiemController.clear();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Đã thêm tiền tiết kiệm!'),
+                                    backgroundColor: Color(0xFF34C759),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF6366F1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'Thêm tiết kiệm',
+                                  style: TextStyle(
+                                    fontFamily: 'Roboto',
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Rút Tiền Tiết Kiệm',
+                            style: TextStyle(
+                              fontFamily: 'Roboto',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _tienRutController,
+                            decoration: InputDecoration(
+                              labelText: 'Số tiền muốn rút (VNĐ)',
+                              labelStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              suffixText: 'VNĐ',
+                              suffixStyle: TextStyle(
+                                fontFamily: 'Roboto',
+                                color: Colors.grey.shade600,
+                                fontSize: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(color: Color(0xFFFF2D55)),
+                              ),
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              NumberFormatter(),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Tổng tiết kiệm hiện tại: ${_tongTienTietKiem == 0 ? '0' : _tongTienTietKiem.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')} VNĐ',
+                            style: const TextStyle(
+                              fontFamily: 'Roboto',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFFFF2D55),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Center(
+                            child: GestureDetector(
+                              onTap: () {
+                                String rawTienRut = _tienRutController.text.replaceAll('.', '');
+                                double tienRut = double.tryParse(rawTienRut) ?? 0.0;
+
+                                if (tienRut <= 0) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Vui lòng nhập số tiền hợp lệ!'),
+                                      backgroundColor: Color(0xFFFF2D55),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                if (tienRut > _tongTienTietKiem) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Số tiền rút vượt quá số tiền tiết kiệm hiện có!'),
+                                      backgroundColor: Color(0xFFFF2D55),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                  return;
+                                }
+
+                                setState(() {
+                                  _tongTienTietKiem -= tienRut;
+                                });
+
+                                _tienRutController.clear();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Đã rút tiền tiết kiệm!'),
+                                    backgroundColor: Color(0xFF34C759),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF2D55),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'Rút tiền',
+                                  style: TextStyle(
+                                    fontFamily: 'Roboto',
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Hủy',
+                                  style: TextStyle(
+                                    fontFamily: 'Roboto',
+                                    color: Colors.grey.shade600,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: GestureDetector(
                             onTap: () {
                               String rawMucTieu = _mucTieuController.text.replaceAll('.', '');
                               double newMucTieu = double.tryParse(rawMucTieu) ?? _mucTieu;
@@ -460,7 +738,7 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('Ngày kết thúc phải sau ngày bắt đầu!'),
-                                    backgroundColor: Color(0xFFEF5350),
+                                    backgroundColor: Color(0xFFFF2D55),
                                     duration: Duration(seconds: 2),
                                   ),
                                 );
@@ -474,391 +752,39 @@ class _ManHinhQuanLyMucTieuState extends State<ManHinhQuanLyMucTieu> {
                               _saveMoTaMucTieu();
                               _saveThoiGianMucTieu();
                               widget.onMucTieuUpdated?.call(_mucTieu, _ngayKetThuc);
-
-                              // Lên lịch thông báo ngoài thiết bị
-                              _scheduleNotification(
-                                _ngayKetThuc,
-                                _moTaMucTieuController.text,
-                              );
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Đã lưu mục tiêu tiết kiệm!'),
-                                  backgroundColor: Color(0xFF4CAF50),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF40C4FF), Color(0xFF81D4FA)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: const Text(
-                                'Lưu mục tiêu',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _tienTietKiemController,
-                        decoration: InputDecoration(
-                          labelText: 'Số tiền tiết kiệm (VNĐ)',
-                          labelStyle: const TextStyle(color: Colors.black54),
-                          prefixIcon: const Icon(
-                            Icons.account_balance_wallet,
-                            color: Color(0xFF40C4FF),
-                          ),
-                          suffixText: 'VNĐ',
-                          suffixStyle: const TextStyle(color: Colors.black54),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFF40C4FF)),
-                          ),
-                        ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          NumberFormatter(),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Tổng tiết kiệm hiện tại: ${_tongTienTietKiem == 0 ? '0' : _tongTienTietKiem.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')} VNĐ',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF40C4FF),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              String rawTienTietKiem = _tienTietKiemController.text.replaceAll('.', '');
-                              double tienTietKiem = double.tryParse(rawTienTietKiem) ?? 0.0;
-
-                              if (tienTietKiem <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Vui lòng nhập số tiền hợp lệ!'),
-                                    backgroundColor: Color(0xFFEF5350),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              if (tienTietKiem > widget.soDu) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Số tiền tiết kiệm không được vượt quá số dư hiện có!'),
-                                    backgroundColor: Color(0xFFEF5350),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              setState(() {
-                                _tongTienTietKiem += tienTietKiem;
+                              Navigator.pop(context, {
+                                'mucTieu': _mucTieu,
+                                'tongTienTietKiem': _tongTienTietKiem,
                               });
-
-                              _tienTietKiemController.clear();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Đã thêm tiền tiết kiệm!'),
-                                  backgroundColor: Color(0xFF4CAF50),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF40C4FF), Color(0xFF81D4FA)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
+                                color: const Color(0xFF6366F1),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Text(
-                                'Thêm tiết kiệm',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                              child: const Center(
+                                child: Text(
+                                  'Lưu',
+                                  style: TextStyle(
+                                    fontFamily: 'Roboto',
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Card(
-                elevation: 4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _tienRutController,
-                        decoration: InputDecoration(
-                          labelText: 'Số tiền muốn rút (VNĐ)',
-                          labelStyle: const TextStyle(color: Colors.black54),
-                          prefixIcon: const Icon(
-                            Icons.account_balance_wallet,
-                            color: Color(0xFFEF5350),
-                          ),
-                          suffixText: 'VNĐ',
-                          suffixStyle: const TextStyle(color: Colors.black54),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFEF5350)),
-                          ),
                         ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          NumberFormatter(),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Tổng tiết kiệm hiện tại: ${_tongTienTietKiem == 0 ? '0' : _tongTienTietKiem.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')} VNĐ',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFEF5350),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              String rawTienRut = _tienRutController.text.replaceAll('.', '');
-                              double tienRut = double.tryParse(rawTienRut) ?? 0.0;
-
-                              if (tienRut <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Vui lòng nhập số tiền hợp lệ!'),
-                                    backgroundColor: Color(0xFFEF5350),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              if (tienRut > _tongTienTietKiem) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Số tiền rút vượt quá số tiền tiết kiệm hiện có!'),
-                                    backgroundColor: Color(0xFFEF5350),
-                                    duration: Duration(seconds: 2),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              setState(() {
-                                _tongTienTietKiem -= tienRut;
-                              });
-
-                              _tienRutController.clear();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Đã rút tiền tiết kiệm!'),
-                                  backgroundColor: Color(0xFF4CAF50),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFFEF5350), Color(0xFFE53935)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: const Text(
-                                'Rút tiền',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 6,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: const Text(
-                        'Hủy',
-                        style: TextStyle(
-                          color: Colors.black54,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      ],
                     ),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      String rawMucTieu = _mucTieuController.text.replaceAll('.', '');
-                      double newMucTieu = double.tryParse(rawMucTieu) ?? _mucTieu;
-
-                      if (_ngayKetThuc.isBefore(_ngayBatDau)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Ngày kết thúc phải sau ngày bắt đầu!'),
-                            backgroundColor: Color(0xFFEF5350),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                        return;
-                      }
-
-                      setState(() {
-                        _mucTieu = newMucTieu;
-                      });
-
-                      _saveMoTaMucTieu();
-                      _saveThoiGianMucTieu();
-                      widget.onMucTieuUpdated?.call(_mucTieu, _ngayKetThuc);
-
-                      // Lên lịch thông báo ngoài thiết bị
-                      _scheduleNotification(
-                        _ngayKetThuc,
-                        _moTaMucTieuController.text,
-                      );
-
-                      Navigator.pop(context, {
-                        'mucTieu': _mucTieu,
-                        'tongTienTietKiem': _tongTienTietKiem,
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF40C4FF), Color(0xFF81D4FA)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 6,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: const Text(
-                        'Lưu',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                    const SizedBox(height: 60),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
